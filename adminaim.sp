@@ -9,14 +9,20 @@ public Plugin:myinfo =
 	name = "Admin Aim",
 	author = "DarkGL",
 	description = "Admin Aim",
-	version = "1.0",
-	url = "http://darkgl.pl"
+	version = "1.1",
+	url = "https://darkgl.pl"
 }
 
-new bool:aimOn[ 33 ];
+new bool:aimOn[ MAXPLAYERS ];
+
+ConVar g_cvBlast;
+ConVar g_cvKnife;
 
 public OnPluginStart(){
 	RegAdminCmd("aim", aimMenu , ADMFLAG_BAN , "Admin Aim Menu" );
+	
+	g_cvBlast = CreateConVar( "admin_aim_blast", "0", "HE/Fire Headshots" );
+	g_cvKnife = CreateConVar( "admin_aim_knife", "0", "Knife Headshots" );
 }
 
 public bool:OnClientConnect(client, String:rejectmsg[], maxlen){
@@ -42,9 +48,9 @@ public Action:aimMenu( client, args ){
 }
 
 public createMenu( client ){
-	new Handle:menuHandle = CreateMenu( MenuHandler );
-	
-	SetMenuTitle( menuHandle, "Admin Aim Menu" );
+	Menu menuHandle = new Menu( MenuHandler , MENU_ACTIONS_ALL );
+		
+	menuHandle.SetTitle( "Admin Aim Menu" );
 	
 	for( new iPlayer = 1 ; iPlayer <= MaxClients ; iPlayer++ ){
 		if( !IsClientConnected( iPlayer ) ){
@@ -61,13 +67,13 @@ public createMenu( client ){
 		Format( szPlayer , sizeof( szPlayer ) , "%d" , iPlayer );
 		Format( szDisplay , sizeof( szDisplay ) , "%s: %s" , szName , aimOn[ iPlayer ] ? "On":"Off" );
 		
-		AddMenuItem( menuHandle , szPlayer , szDisplay );
+		menuHandle.AddItem( szPlayer , szDisplay );
 	}
 	
-	DisplayMenu( menuHandle, client, MENU_TIME_FOREVER );
+	menuHandle.Display( client , MENU_TIME_FOREVER );
 }
 
-public MenuHandler(Handle:menu, MenuAction:action, param1, param2){
+public MenuHandler( Menu menu, MenuAction action, int param1, int param2){
 	
 	if (action == MenuAction_Select){
 		new String: szInfo[32];
@@ -82,14 +88,11 @@ public MenuHandler(Handle:menu, MenuAction:action, param1, param2){
 		
 		aimOn[ iPlayer ] = !aimOn[ iPlayer ];
 		
-		CloseHandle(menu);
+		delete menu;
 		
 		createMenu( param1 );
 	}
-	else if (action == MenuAction_End){
-		
-		CloseHandle(menu);
-	}
+	
 }
 
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom){
@@ -97,9 +100,39 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
 		return Plugin_Continue;
 	}
 	
-	if( aimOn[ attacker ] ){
-		damagetype = CS_DMG_HEADSHOT;
+	if( !aimOn[ attacker ] ){
+		return Plugin_Continue;
+	}
+	
+	PrintToServer( "%d" , damagetype );
+	
+	if( damagetype & DMG_BULLET ){
+		damagetype |= CS_DMG_HEADSHOT;
+	
+		damage = float(GetClientHealth(victim) + GetClientArmor(victim));
 		
+		return Plugin_Changed;
+	}
+	
+	if( GetConVarInt( g_cvBlast ) && damagetype & DMG_BLAST ){
+		damagetype |= CS_DMG_HEADSHOT;
+	
+		damage = float(GetClientHealth(victim) + GetClientArmor(victim));
+		
+		return Plugin_Changed;
+	}
+	
+	if( GetConVarInt( g_cvBlast ) && damagetype & DMG_BURN ){
+		damagetype |= CS_DMG_HEADSHOT;
+	
+		damage = float(GetClientHealth(victim) + GetClientArmor(victim));
+		
+		return Plugin_Changed;
+	}
+
+	if( GetConVarInt( g_cvKnife ) && damagetype & DMG_SLASH ){
+		damagetype |= CS_DMG_HEADSHOT;
+	
 		damage = float(GetClientHealth(victim) + GetClientArmor(victim));
 		
 		return Plugin_Changed;
